@@ -276,7 +276,12 @@ render_open_ol_block(MD_RENDER_HTML* r, const MD_BLOCK_OL_DETAIL* det)
         return;
     }
 
+#ifndef __riscos
     snprintf(buf, sizeof(buf), "<ol start=\"%u\">\n", det->start);
+#else
+    /* CJF: I thought I implemented snprintf? */
+    sprintf(buf, "<ol start=\"%u\">\n", det->start);
+#endif
     RENDER_VERBATIM(r, buf);
 }
 
@@ -530,6 +535,7 @@ md_render_html(const MD_CHAR* input, MD_SIZE input_size,
                void (*process_output)(const MD_CHAR*, MD_SIZE, void*),
                void* userdata, unsigned parser_flags, unsigned renderer_flags)
 {
+#ifndef __riscos
     MD_RENDER_HTML render = { process_output, userdata, renderer_flags, 0, { 0 } };
     int i;
 
@@ -544,6 +550,27 @@ md_render_html(const MD_CHAR* input, MD_SIZE input_size,
         debug_log_callback,
         NULL
     };
+#else
+    /* JRF: Never got around to merging these changes into the compiler */
+    MD_RENDER_HTML render = {0};
+    int i;
+
+    MD_PARSER parser = {0};
+
+    render.process_output = process_output;
+    render.userdata = userdata;
+    render.flags = renderer_flags;
+
+    parser.abi_version = 0;
+    parser.flags = parser_flags;
+    parser.enter_block = enter_block_callback;
+    parser.leave_block = leave_block_callback;
+    parser.enter_span = enter_span_callback;
+    parser.leave_span = leave_span_callback;
+    parser.text = text_callback;
+    parser.debug_log = debug_log_callback;
+    parser.syntax = NULL;
+#endif
 
     /* Build map of characters which need escaping. */
     for(i = 0; i < 256; i++) {

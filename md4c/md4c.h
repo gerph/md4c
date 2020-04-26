@@ -30,6 +30,19 @@
     extern "C" {
 #endif
 
+#ifndef __riscos
+#else
+    #ifndef MD_VERSION_MAJOR
+        #define MD_VERSION_MAJOR (0)
+    #endif
+    #ifndef MD_VERSION_MINOR
+        #define MD_VERSION_MINOR (4)
+    #endif
+    #ifndef MD_VERSION_RELEASE
+        #define MD_VERSION_RELEASE (3)
+    #endif
+#endif
+
 #if defined MD4C_USE_UTF16
     /* Magic to support UTF-16. Not that in order to use it, you have to define
      * the macro MD4C_USE_UTF16 both when building MD4C as well as when

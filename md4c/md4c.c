@@ -209,7 +209,11 @@ typedef enum MD_LINETYPE_tag MD_LINETYPE;
 
 typedef struct MD_LINE_ANALYSIS_tag MD_LINE_ANALYSIS;
 struct MD_LINE_ANALYSIS_tag {
+#ifndef __riscos
     MD_LINETYPE type    : 16;
+#else
+    int type            : 16;
+#endif
     unsigned data       : 16;
     OFF beg;
     OFF end;
@@ -1492,8 +1496,13 @@ struct MD_REF_DEF_tag {
     SZ title_size;
     OFF dest_beg;
     OFF dest_end;
+#ifndef __riscos
     unsigned char label_needs_free : 1;
     unsigned char title_needs_free : 1;
+#else
+    unsigned int label_needs_free : 1;
+    unsigned int title_needs_free : 1;
+#endif
 };
 
 /* Label equivalence is quite complicated with regards to whitespace and case
@@ -1609,7 +1618,11 @@ typedef struct MD_REF_DEF_LIST_tag MD_REF_DEF_LIST;
 struct MD_REF_DEF_LIST_tag {
     int n_ref_defs;
     int alloc_ref_defs;
+#ifndef __riscos
     MD_REF_DEF* ref_defs[];  /* Valid items always  point into ctx->ref_defs[] */
+#else
+    MD_REF_DEF** ref_defs;  /* Valid items always  point into ctx->ref_defs[] */
+#endif
 };
 
 static int
@@ -4511,7 +4524,11 @@ abort:
 #define MD_BLOCK_SETEXT_HEADER      0x08
 
 struct MD_BLOCK_tag {
+#ifndef __riscos
     MD_BLOCKTYPE type  :  8;
+#else
+    int type           :  8;
+#endif
     unsigned flags     :  8;
 
     /* MD_BLOCK_H:      Header level (1 - 6)

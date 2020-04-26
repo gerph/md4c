@@ -2180,7 +2180,13 @@ entity_cmp(const void* p_key, const void* p_entity)
 const struct entity*
 entity_lookup(const char* name, size_t name_size)
 {
+#ifndef __riscos
     struct entity_key key = { name, name_size };
+#else
+    struct entity_key key;
+    key.name = name;
+    key.name_size = name_size;
+#endif
 
     return bsearch(&key,
                    entity_table,
