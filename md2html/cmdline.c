@@ -137,7 +137,12 @@ cmdline_read(const CMDLINE_OPTION* options, int argc, char** argv,
                             if(opt->flags & (CMDLINE_OPTFLAG_OPTIONALARG | CMDLINE_OPTFLAG_REQUIREDARG)) {
                                 ret = callback(opt->id, argv[i]+2+len+1, userdata);
                             } else {
+#ifndef __riscos
                                 snprintf(auxbuf, CMDLINE_AUXBUF_SIZE, "--%s", opt->longname);
+#else
+                                /* CJF: Sure I implemented the snprintf */
+                                sprintf(auxbuf, "--%s", opt->longname);
+#endif
                                 ret = callback(CMDLINE_OPTID_BOGUSARG, auxbuf, userdata);
                             }
                             break;
