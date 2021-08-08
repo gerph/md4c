@@ -28,7 +28,7 @@
 #include <string.h>
 #include <time.h>
 
-#include "render_html.h"
+#include "md4c-html.h"
 #include "cmdline.h"
 
 
@@ -36,11 +36,12 @@
 /* Global options. */
 static unsigned parser_flags = 0;
 #ifndef MD4C_USE_ASCII
-    static unsigned renderer_flags = MD_RENDER_FLAG_DEBUG | MD_RENDER_FLAG_SKIP_UTF8_BOM;
+    static unsigned renderer_flags = MD_HTML_FLAG_DEBUG | MD_HTML_FLAG_SKIP_UTF8_BOM;
 #else
-    static unsigned renderer_flags = MD_RENDER_FLAG_DEBUG;
+    static unsigned renderer_flags = MD_HTML_FLAG_DEBUG;
 #endif
 static int want_fullhtml = 0;
+static int want_xhtml = 0;
 static int want_stat = 0;
 
 
@@ -113,7 +114,7 @@ process_output(const MD_CHAR* text, MD_SIZE size, void* userdata)
 static int
 process_file(FILE* in, FILE* out)
 {
-    MD_SIZE n;
+    size_t n;
     struct membuffer buf_in = {0};
     struct membuffer buf_out = {0};
     int ret = -1;
@@ -134,14 +135,14 @@ process_file(FILE* in, FILE* out)
 
     /* Input size is good estimation of output size. Add some more reserve to
      * deal with the HTML header/footer and tags. */
-    membuf_init(&buf_out, buf_in.size + buf_in.size/8 + 64);
+    membuf_init(&buf_out, (MD_SIZE)(buf_in.size + buf_in.size/8 + 64));
 
     /* Parse the document. This shall call our callbacks provided via the
      * md_renderer_t structure. */
     t0 = clock();
 
-    ret = md_render_html(buf_in.data, buf_in.size, process_output,
-                (void*) &buf_out, parser_flags, renderer_flags);
+    ret = md_html(buf_in.data, (MD_SIZE)buf_in.size, process_output, (void*) &buf_out,
+                    parser_flags, renderer_flags);
 
     t1 = clock();
     if(ret != 0) {
@@ -151,10 +152,18 @@ process_file(FILE* in, FILE* out)
 
     /* Write down the document in the HTML format. */
     if(want_fullhtml) {
-        fprintf(out, "<html>\n");
+        if(want_xhtml) {
+            fprintf(out, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+            fprintf(out, "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.1//EN\" "
+                            "\"http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd\">\n");
+            fprintf(out, "<html xmlns=\"http://www.w3.org/1999/xhtml\">\n");
+        } else {
+            fprintf(out, "<!DOCTYPE html>\n");
+            fprintf(out, "<html>\n");
+        }
         fprintf(out, "<head>\n");
         fprintf(out, "<title></title>\n");
-        fprintf(out, "<meta name=\"generator\" content=\"md2html\">\n");
+        fprintf(out, "<meta name=\"generator\" content=\"md2html\"%s>\n", want_xhtml ? " /" : "");
         fprintf(out, "</head>\n");
         fprintf(out, "<body>\n");
     }
@@ -190,6 +199,7 @@ out:
 static const CMDLINE_OPTION cmdline_options[] = {
     { 'o', "output",                        'o', CMDLINE_OPTFLAG_REQUIREDARG },
     { 'f', "full-html",                     'f', 0 },
+    { 'x', "xhtml",                         'x', 0 },
     { 's', "stat",                          's', 0 },
     { 'h', "help",                          'h', 0 },
     { 'v', "version",                       'v', 0 },
@@ -229,6 +239,7 @@ usage(void)
         "General options:\n"
         "  -o  --output=FILE    Output file (default is standard output)\n"
         "  -f, --full-html      Generate full HTML document, including header\n"
+        "  -x, --xhtml          Generate XHTML instead of HTML\n"
         "  -s, --stat           Measure time of input parsing\n"
         "  -h, --help           Display this help and exit\n"
         "  -v, --version        Display version and exit\n"
@@ -299,6 +310,7 @@ cmdline_callback(int opt, char const* value, void* data)
 
         case 'o':   output_path = value; break;
         case 'f':   want_fullhtml = 1; break;
+        case 'x':   want_xhtml = 1; renderer_flags |= MD_HTML_FLAG_XHTML; break;
         case 's':   want_stat = 1; break;
         case 'h':   usage(); exit(0); break;
         case 'v':   version(); exit(0); break;
@@ -306,7 +318,7 @@ cmdline_callback(int opt, char const* value, void* data)
         case 'c':   parser_flags = MD_DIALECT_COMMONMARK; break;
         case 'g':   parser_flags = MD_DIALECT_GITHUB; break;
 
-        case 'E':   renderer_flags |= MD_RENDER_FLAG_VERBATIM_ENTITIES; break;
+        case 'E':   renderer_flags |= MD_HTML_FLAG_VERBATIM_ENTITIES; break;
         case 'A':   parser_flags |= MD_FLAG_PERMISSIVEATXHEADERS; break;
         case 'I':   parser_flags |= MD_FLAG_NOINDENTEDCODEBLOCKS; break;
         case 'F':   parser_flags |= MD_FLAG_NOHTMLBLOCKS; break;
