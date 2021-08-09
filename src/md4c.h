@@ -39,7 +39,7 @@
         #define MD_VERSION_MINOR (4)
     #endif
     #ifndef MD_VERSION_RELEASE
-        #define MD_VERSION_RELEASE (3)
+        #define MD_VERSION_RELEASE (8)
     #endif
 #endif
 
