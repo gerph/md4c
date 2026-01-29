@@ -27,7 +27,7 @@ jobs:
       - echo **** Building library ****
       - dir src.riscos
       - amu export
-      - copy <Lib$Dir>.MarkdownMD4C ^.^.Artifacts.Lib ~CVR
+      - copy C:MarkdownMD4C ^.^.Artifacts.Lib ~CVR
       - dir ^.^
 
       - echo **** Building command line tool ****
