@@ -74,7 +74,7 @@ jobs:
           echo "::set-output name=version::$version"
           echo "::set-output name=leafname::$leafname"
 
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v6
         with:
           name: RISCOS-build
           path: ${{ steps.version.outputs.leafname }}
