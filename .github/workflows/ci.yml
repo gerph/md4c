@@ -1,21 +1,20 @@
 ---
-# RISC OS CI build through build.riscos.online
+# RISC OS CI build of the MarkdownMD4C library and the Markdown2HTML tool.
 #
-# To reuse this configuration with your own repository:
+# The build runs in the gerph/riscos-build container. The result is a RISC OS zip
+# containing:
 #
-#   - Create a .robuild.yaml to describe what should be built on RISC OS.
-#       - `jobs.build.script` should be a list of commands to run on RISC OS
-#       - `jobs.build.artifacts.path` should be the directory to zip.
-#   - Create a VersionNum file if you wish to use the automated versioning
-#     in the same style as the RISC OS sources. [optional]
-#   - Update the 3rd step ('give the archive a versioned name') to give a
-#     suitable name for the archive.
-#   - Update the 4th step ('upload-artifacts') to include the same names.
+#   Lib/MarkdownMD4C/{h,o}    the library, as exported for other projects to build against
+#   Markdown2HTML,ff8         the command line tool
 #
-# The 'release' job is triggered when a tag starting with a 'v' is created,
-# which will create a GitHub release for the repository with the name of the
-# version tag. The release will be a draft, and should be updated with
-# changes as you see fit.
+# The archive is named MarkdownMD4C-<version>.zip, where <version> is
+# <md4c version>-<n>, and <n> is the total number of commits in the history (as reported by
+# `git rev-list --count HEAD`), which only ever increases. This allows more than one release
+# of the same md4c version, if the RISC OS port needs correcting.
+#
+# The 'release' job is triggered when a tag starting with a 'v' is created. The tag must
+# be v<version>, eg v0.4.6-558. It creates a draft release, which should be published when
+# it has been checked.
 #
 
 name: RISC OS
@@ -27,14 +26,13 @@ on:
   push:
     branches: ["**"]
     tags: ["v*"]
-  # Pull request events happen on pull request state transitions, so we probably don't want this here.
-  #pull_request:
-  #  branches: ["*"]
 
 jobs:
   build-riscos:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
+    container:
+      image: gerph/riscos-build:latest
 
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -42,37 +40,59 @@ jobs:
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it.
+      # The full history is needed to count the commits for the release number.
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
-      # Step intended to be reused in CI pipelines.
-      - name: Build through build.riscos.online
+      - name: Build the library
         run: |
-          set -o pipefail
-          # Zip up the source to send to robuild
-          zip -q9r /tmp/source-archive.zip src md2html .robuild.yaml
-          # Fetch the build client
-          curl -s -L -o riscos-build-online https://github.com/gerph/robuild-client/releases/download/v0.05/riscos-build-online && chmod +x riscos-build-online
-          # Send the archive file to build service
-          ./riscos-build-online -i /tmp/source-archive.zip -a off -o /tmp/built
+          cd src/riscos
+          riscos-amu export
+
+      - name: Build the command line tool
+        run: |
+          cd md2html/riscos
+          riscos-amu
+
+      - name: Create archive of the build
+        run: |
+          mkdir -p Artifacts/Lib
+          cp -R "$BUILD_DIR/Export/Lib/MarkdownMD4C" Artifacts/Lib/MarkdownMD4C
+          cp md2html/riscos/aif32/Markdown2HTML,ff8 Artifacts/
+          cd Artifacts
+          riscos-zip ../MarkdownMD4C.zip *
 
       - name: Give the output a versioned name
         id: version
         run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           version_major=$(sed '/MD_VERSION_MAJOR / ! d ; s/.*MD_VERSION_MAJOR *(\(.*\))/\1/' src/md4c.h)
           version_minor=$(sed '/MD_VERSION_MINOR / ! d ; s/.*MD_VERSION_MINOR *(\(.*\))/\1/' src/md4c.h)
           version_release=$(sed '/MD_VERSION_RELEASE / ! d ; s/.*MD_VERSION_RELEASE *(\(.*\))/\1/' src/md4c.h)
-          version=${version_major}.${version_minor}.${version_release}
+          base=${version_major}.${version_minor}.${version_release}
+          # The total number of commits, so that the number always increases.
+          number=$(git rev-list --count HEAD)
+          if [[ -z "$number" || "$number" -lt 1 ]] ; then
+              echo "Could not work out the number of commits"
+              exit 1
+          fi
+          version="${base}-${number}"
           echo "This is version: $version"
           leafname="MarkdownMD4C-$version.zip"
-          if [ -f /tmp/built,a91 ] ; then
-              cp /tmp/built,a91 "MarkdownMD4C-$version.zip"
+          if [[ "$GITHUB_REF_TYPE" == "tag" && "$GITHUB_REF_NAME" != "v$version" ]] ; then
+              echo "Tag $GITHUB_REF_NAME does not match the version v$version"
+              exit 1
+          fi
+          if [ -f MarkdownMD4C.zip ] ; then
+              mv MarkdownMD4C.zip "$leafname"
           else
               echo "No archive was built?"
               exit 1
           fi
-          echo "::set-output name=version::$version"
-          echo "::set-output name=leafname::$leafname"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "leafname=$leafname" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -86,32 +106,20 @@ jobs:
     needs: build-riscos
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
     steps:
-      - name: Download built binary
+      - name: Download built RISC OS binary
         uses: actions/download-artifact@v8
         with:
           name: RISCOS-build
 
       - name: Create Release
         id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: ncipollo/release-action@v1
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ needs.build-riscos.outputs.version }}
-          draft: true
+          name: Release ${{ needs.build-riscos.outputs.version }}
           prerelease: false
-
-      - name: Upload Release Asset
-        id: upload-release-asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`.
-          # See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: RISCOS-build/${{ needs.build-riscos.outputs.leafname }}
-          asset_name: ${{ needs.build-riscos.outputs.leafname }}
-          asset_content_type: application/zip
+          draft: true
+          artifacts: "${{ needs.build-riscos.outputs.leafname }}"
+          artifactContentType: application/zip
